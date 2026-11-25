@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+# 公共仓库专用：收到私有源码仓库的 repository_dispatch 通知后构建发布
+# 使用方式：公共仓库创建后，把本文件放到它的 .github/workflows/deploy.yml
+on:
+  repository_dispatch:
+    types: [build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署，新推送取消进行中的旧任务
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出私有源码仓库
+        uses: actions/checkout@v4
+        with:
+          repository: mubeiyumian/my-home
+          ref: main
+          token: ${{ secrets.GH_PAT }}
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建静态产物
+        run: npm run build
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
